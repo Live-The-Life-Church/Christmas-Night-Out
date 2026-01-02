@@ -1,0 +1,330 @@
+<!--
+Squarespace search block (no visible Collapse button).
+Drop this into your page where the previous search block was.
+-->
+<div class="family-search-wrap">
+  <div class="family-search-inner">
+    <h2 class="family-search-title">Search Photos Here</h2>
+
+    <div class="family-search-row">
+      <input
+        type="text"
+        id="familySearch"
+        placeholder="Enter last name or full name (e.g. Doe or Doe John)"
+        aria-label="Search family photos by name"
+        autocomplete="off"
+      />
+      <button id="familySearchBtn" class="family-search-btn" type="button">Search</button>
+    </div>
+
+    <!-- status text (kept your id so any existing code still works) -->
+    <p id="searchCount" class="family-search-meta" style="display:none;"></p>
+
+    <!-- no-results message (kept your id for compatibility) -->
+    <p id="noResults" class="family-search-meta no-results" style="display:none;">
+      No photos found. Please check spelling.
+    </p>
+  </div>
+</div>
+
+<!-- Inline results section: initially collapsed. JS toggles .expanded -->
+<section id="search-results" class="results" aria-live="polite" aria-hidden="true">
+  <div class="results-header">
+    <div id="results-count" class="results-count" aria-atomic="true"></div>
+    <!-- Collapse button removed intentionally -->
+  </div>
+
+  <div id="results-grid" class="results-grid" aria-live="polite" aria-atomic="false"></div>
+</section>
+
+<style>
+/* ==========================
+   Search area (kept your base rules + adjustments)
+   ========================== */
+.family-search-wrap { display:flex; justify-content:center; width:100%; box-sizing:border-box; padding:18px 12px; }
+.family-search-inner { display:flex; flex-direction:column; align-items:center; width:100%; max-width:720px; box-sizing:border-box; text-align:center; }
+.family-search-title { width:100%; text-align:center; margin:0 0 18px; font-size:48px; line-height:1; font-weight:700; color:#fff; }
+
+/* input + button row */
+.family-search-row { display:flex; gap:12px; width:100%; align-items:center; }
+.family-search-row input#familySearch { flex:1; padding:12px 14px; font-size:16px; border:2px solid rgba(255,255,255,0.9); background:rgba(255,255,255,0.06); color:#fff; border-radius:6px; outline:none; }
+.family-search-row input#familySearch::placeholder { color: rgba(255,255,255,0.8); }
+
+/* search button styling */
+.family-search-btn {
+  background: #fff;
+  color: #8b1b1b;
+  font-weight:700;
+  padding:10px 16px;
+  border-radius:6px;
+  border: none;
+  cursor: pointer;
+  white-space:nowrap;
+}
+.family-search-btn:hover { transform: translateY(-1px); }
+
+/* meta text */
+.family-search-meta{ color:#fff; font-weight:700; margin:8px 0 0; display:block; text-shadow:0 1px 2px rgba(0,0,0,0.5); }
+.family-search-meta.no-results{ color:#ffecec !important; }
+
+/* ==========================
+   Animated inline results area
+   - collapsed by default
+   - .expanded toggles visibility with smooth animation
+   ========================== */
+.results {
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height 420ms cubic-bezier(.2,.9,.2,1),
+    opacity 220ms ease,
+    transform 220ms ease;
+  opacity: 0;
+  transform: translateY(-6px);
+  border-top: 2px solid rgba(255,255,255,0.06);
+  background: #0b0b0b;
+  color: #fff;
+  margin-top: 18px;
+}
+
+/* When expanded, allow grid to be visible (adjust max-height if you expect taller grids) */
+.results.expanded {
+  max-height: 1400px; /* tweak if needed or use calc(100vh - X) */
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* header */
+.results-header {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start; /* left align count now that collapse button removed */
+  padding:14px 18px;
+  border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.results-count { font-size:1rem; color:#fff; }
+
+/* grid and cards (kept your previous card styles but responsive) */
+.results-grid {
+  width:100%;
+  max-width:1100px;
+  margin:12px auto 28px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:22px;
+  padding:0 12px;
+  box-sizing:border-box;
+}
+.sr-card { text-align:center; background:transparent; border-radius:6px; overflow:hidden; }
+.sr-card img { width:100%; height:200px; object-fit:cover; display:block; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.12); }
+
+/* controls below each image */
+.sr-controls { margin-top:12px; text-align:center; }
+.sr-download { display:inline-block; background:#fff; color:#8b1b1b; padding:8px 12px; border-radius:6px; font-weight:700; border:none; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); transition:transform .12s, box-shadow .12s; }
+.sr-download:hover { transform:scale(1.03); box-shadow:0 4px 14px rgba(0,0,0,0.28); }
+
+/* hide helpers */
+.photo-hidden, .family-search-hide-original { display:none !important; }
+
+/* responsive tweaks */
+@media (max-width:768px) {
+  .family-search-inner { max-width:92%; }
+  .family-search-title { font-size:36px; }
+  .results-grid { grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
+  .sr-card img { height:160px; }
+}
+@media (max-width:480px) {
+  .family-search-row { flex-direction:column; gap:8px; }
+  .family-search-btn { width:100%; }
+  .family-search-title { font-size:28px; }
+  .results-grid { grid-template-columns:1fr; gap:12px; }
+  .sr-card img { height:140px; }
+}
+</style>
+
+<script>
+/* Manifest-based search + expand-on-results (no visible collapse button).
+   Uses your IDs: familySearch, familySearchBtn, searchCount, noResults
+   Renders into #results-grid and toggles #search-results .expanded
+*/
+(async function () {
+  const MANIFEST_URL = 'https://raw.githubusercontent.com/Live-The-Life-Church/Christmas-Night-Out/refs/heads/main/cno_2025_photos_manifest.json';
+
+  const searchBox = document.getElementById('familySearch');
+  const searchBtn = document.getElementById('familySearchBtn');
+  const noResults = document.getElementById('noResults');
+  const searchCount = document.getElementById('searchCount');
+
+  const resultsSection = document.getElementById('search-results');
+  const resultsGrid = document.getElementById('results-grid');
+  const resultsCountEl = document.getElementById('results-count');
+
+  // small helpers
+  function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+  function norm(text){
+    if(!text) return '';
+    // normalize diacritics, collapse whitespace, lowercase
+    return text.toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase().trim();
+  }
+
+  // load manifest
+  let manifest = [];
+  try {
+    const res = await fetch(MANIFEST_URL);
+    if (!res.ok) throw new Error('Manifest fetch failed: ' + res.status);
+    const raw = await res.json();
+
+    manifest = raw.map(m => ({
+      url: (m.url || m.image || m.src || '').toString(),
+      caption: (m.caption || '').toString().trim(),
+      lastName: (m.lastName || '').toString(),
+      firstName: (m.firstName || '').toString(),
+      familyId: m.familyId || m.family || ''
+    })).filter(m => m.url);
+
+  } catch (err) {
+    console.error('Failed to load manifest at', MANIFEST_URL, err);
+    const inner = document.querySelector('.family-search-inner');
+    if (inner) inner.insertAdjacentHTML('beforeend', '<p style="color: #ffbcbc; font-weight:700;">Failed to load photo manifest. Check MANIFEST_URL.</p>');
+    return;
+  }
+
+  // download helpers
+  function getFilenameFromUrl(url, caption) {
+    if (!url) return (caption ? caption.replace(/\s+/g,'_') : 'photo') + '.jpg';
+    try {
+      const u = new URL(url, window.location.href);
+      const name = (u.pathname.split('/').pop().split('?')[0]) || '';
+      if (name) return name;
+    } catch(e){}
+    return (caption?caption.replace(/\s+/g,'_'):'photo') + '.jpg';
+  }
+
+  async function downloadViaFetch(url, filename, btn) {
+    if (!url) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Downloading...'; }
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('Network response not OK: ' + res.status);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.style.display='none'; a.href = objUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      console.warn('fetch-download failed; opening that URL in a new tab as fallback', err);
+      window.open(url, '_blank', 'noopener');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Download'; }
+    }
+  }
+
+  // render a single card
+  function createCard(obj){
+    const card = document.createElement('div'); card.className = 'sr-card';
+    const img = document.createElement('img'); img.src = obj.url; img.alt = obj.caption || 'Family photo';
+    img.loading = 'lazy';
+
+    const controls = document.createElement('div'); controls.className = 'sr-controls';
+    const btn = document.createElement('button'); btn.className = 'sr-download'; btn.type = 'button'; btn.textContent = 'Download';
+    btn.setAttribute('aria-label', 'Download photo');
+
+    btn.addEventListener('click', function () {
+      const filename = getFilenameFromUrl(obj.url, obj.caption);
+      try {
+        const a = document.createElement('a');
+        a.href = obj.url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        downloadViaFetch(obj.url, filename, btn);
+      } catch (e) {
+        downloadViaFetch(obj.url, filename, btn);
+      }
+    }, { passive: true });
+
+    controls.appendChild(btn);
+    card.appendChild(img);
+    card.appendChild(controls);
+    return card;
+  }
+
+  function clearResults() {
+    resultsGrid.innerHTML = '';
+  }
+
+  function expandResults() {
+    resultsSection.classList.add('expanded');
+    resultsSection.setAttribute('aria-hidden', 'false');
+  }
+  function collapseResults() {
+    resultsSection.classList.remove('expanded');
+    resultsSection.setAttribute('aria-hidden', 'true');
+  }
+
+  // core search: case-insensitive token matching across caption/first/last
+  function doSearchRaw(rawQuery) {
+    const q = norm(rawQuery || '');
+    const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
+
+    if (!tokens.length) {
+      clearResults();
+      collapseResults();
+      searchCount.style.display = 'none';
+      noResults.style.display = 'none';
+      resultsCountEl.textContent = '';
+      return;
+    }
+
+    const matches = manifest.filter(m => {
+      const hay = norm((m.caption || '') + ' ' + (m.lastName || '') + ' ' + (m.firstName || ''));
+      return tokens.every(t => hay.includes(t));
+    });
+
+    clearResults();
+
+    if (matches.length) {
+      const fragment = document.createDocumentFragment();
+      matches.forEach(m => fragment.appendChild(createCard(m)));
+      resultsGrid.appendChild(fragment);
+
+      resultsCountEl.textContent = `${matches.length} result${matches.length>1?'s':''} for “${rawQuery.trim()}”`;
+      searchCount.style.display = 'none';
+      noResults.style.display = 'none';
+
+      expandResults();
+
+      const rect = resultsSection.getBoundingClientRect();
+      if (rect.top < 0 || rect.top > window.innerHeight * 0.6) {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+    } else {
+      resultsCountEl.textContent = '';
+      clearResults();
+      collapseResults();
+      searchCount.style.display = 'none';
+      noResults.style.display = 'block';
+    }
+  }
+
+  // wire up input/button events
+  searchBtn.addEventListener('click', () => doSearchRaw(searchBox.value || ''));
+  searchBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearchRaw(searchBox.value || ''); }
+    else if (e.key === 'Escape') { collapseResults(); noResults.style.display = 'none'; searchBox.blur(); }
+  });
+
+  // initial state
+  clearResults();
+  collapseResults();
+  resultsCountEl.textContent = '';
+  searchCount.style.display = 'none';
+  noResults.style.display = 'none';
+
+  // expose for debugging if needed
+  window.__familyPhotoSearch = { doSearchRaw, manifestLength: manifest.length };
+  console.log('Photo manifest loaded — items:', manifest.length);
+
+})();
+</script>
