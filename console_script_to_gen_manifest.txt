@@ -1,0 +1,97 @@
+Firstly Generate The Blog Page For The Year
+- Each Gallery can only hold 250 Photos so spread them accordingly!
+
+Go To The Live Page with all those photos and run this script inside the browser console
+
+--------------------------
+// Run on your blog/collection index page (open devtools Console and paste)
+// It will gather links from the current page, fetch each linked page, extract images & captions, and produce photos_manifest.json
+(async function () {
+  const filterLink = href => {
+    try {
+      // adjust heuristics if needed: require substring common in your family page URLs (e.g. '/santa-photos' or '/blog')
+      if (!href) return false;
+      const u = new URL(href, location.href);
+      if (u.origin !== location.origin) return false; // only same-origin links
+      // exclude common non-content paths
+      if (u.pathname.match(/(\/#|mailto:|tel:|\/search|\/account|\/cart|\/assets)/i)) return false;
+      // optionally filter by substring: uncomment and change to your summary path
+      // return u.pathname.includes('/santa-photos') || u.pathname.includes('/blog');
+      return true;
+    } catch (e) { return false; }
+  };
+
+  // collect candidate page links from current index page
+  const anchors = Array.from(document.querySelectorAll('a'));
+  const pageUrls = Array.from(new Set(anchors.map(a => a.href).filter(filterLink)));
+
+  if (pageUrls.length === 0) {
+    console.warn('No candidate page links found. Adjust link heuristics or run the alternative script.');
+    return;
+  }
+  console.log('Found candidate page links:', pageUrls.length);
+
+  // helpers
+  const uniqBy = (arr, key) => {
+    const seen = new Set(); return arr.filter(it => { const k = key(it); if (seen.has(k)) return false; seen.add(k); return true; });
+  };
+
+  const results = [];
+
+  // for each page, fetch and extract images
+  for (let i = 0; i < pageUrls.length; i++) {
+    const url = pageUrls[i];
+    try {
+      const res = await fetch(url);
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // find images in likely gallery locations
+      const imgEls = Array.from(doc.querySelectorAll('figure img, .sqs-block-gallery img, .sqs-gallery img, img'));
+      imgEls.forEach(img => {
+        // prefer data-image/data-src etc
+        const src = img.getAttribute('data-image') || img.getAttribute('data-src') || img.getAttribute('src') || img.src;
+        if (!src) return;
+        // find caption if present
+        let caption = '';
+        const fig = img.closest('figure');
+        const capEl = (fig && fig.querySelector('figcaption, .image-caption, .gallery-caption, .image-overlay-text-content')) || doc.querySelector('.image-caption, .gallery-caption, .image-overlay-text-content');
+        if (capEl && capEl.textContent) caption = capEl.textContent.trim();
+        else if (img.alt) caption = img.alt.trim();
+
+        results.push({ url: src, caption, sourcePage: url });
+      });
+
+      console.log(`Processed ${i+1}/${pageUrls.length}: ${url} — images found: ${imgEls.length}`);
+    } catch (err) {
+      console.error('Failed to fetch/parse', url, err);
+    }
+    // small delay to be polite
+    await new Promise(r => setTimeout(r, 180));
+  }
+
+  // dedupe by URL
+  const unique = uniqBy(results, it => it.url);
+  console.log('Total extracted image entries:', results.length, 'unique:', unique.length);
+
+  // give an opportunity to inspect small sample in console
+  console.log(unique.slice(0, 20));
+
+  // download JSON file
+  const blob = new Blob([JSON.stringify(unique, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'photos_manifest.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+  console.log('Downloaded photos_manifest.json with', unique.length, 'entries. Upload to Squarespace Files and use MANIFEST_URL in the manifest-based Code Block.');
+})();
+
+
+--------------------------
+
+Following that a manifest will be generated. Parse out all the pages not affilated with this years santa photos.
+
+Generate new manifest file within Github Repo and link it to the script needed within the search.

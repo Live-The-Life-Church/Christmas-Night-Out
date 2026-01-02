@@ -1,0 +1,381 @@
+<!-- Family photo search UI + centered results grid + download buttons -->
+<div class="family-search-wrap">
+  <div class="family-search-inner">
+    <h2 class="family-search-title">Search Photos Here</h2>
+
+    <input
+      type="text"
+      id="familySearch"
+      placeholder="Enter last name or full name (e.g. Doe or Doe John)"
+      aria-label="Search family photos by name"
+    />
+
+    <p id="searchCount" class="family-search-meta" style="display:none;"></p>
+    <p id="noResults" class="family-search-meta no-results" style="display:none;">
+      No photos found. Please check spelling.
+    </p>
+    <!-- search results container will be injected here by JS -->
+  </div>
+</div>
+
+<style>
+/* -------- Layout & center the search area -------- */
+.family-search-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18px 12px;
+}
+.family-search-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  text-align: center;
+}
+.family-search-inner .family-search-title,
+h2.family-search-title {
+  width: 100% !important;
+  text-align: center !important;
+  margin: 0 0 18px !important;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff !important;
+  float: none !important;
+  position: static !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* -------- Search UI styling (Option A) -------- */
+.family-search-wrap .family-search-inner .family-search-meta,
+.family-search-wrap #searchCount,
+.family-search-wrap #noResults {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  font-weight: 700;
+  margin: 8px 0 0;
+  display: block;
+}
+.family-search-wrap #searchCount { font-size: 16px; }
+.family-search-wrap #noResults { color: #ffecec !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+
+#familySearch {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 2px solid rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  border-radius: 6px;
+  outline: none;
+  transition: box-shadow .15s, border-color .15s, background .15s;
+  margin: 0 auto;
+}
+.family-search-wrap #familySearch::placeholder { color: rgba(255,255,255,0.8); }
+.family-search-wrap #familySearch:focus { box-shadow: 0 4px 18px rgba(0,0,0,0.35); border-color: rgba(255,255,255,1); background: rgba(255,255,255,0.04); }
+
+/* highlight token */
+.family-highlight { background: #fff3b0; color: #111 !important; padding: 0 2px; border-radius: 2px; }
+
+/* Download button style used inside original gallery (if present) */
+.family-controls .download-btn {
+  background: #fff; color: #8b1b1b; border-radius: 4px; padding: 6px 10px;
+  font-weight: 700; margin-top: 8px; border: none; cursor: pointer;
+}
+.family-controls .download-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* -------- Hide helpers -------- */
+.photo-hidden { display: none !important; visibility: hidden !important; opacity: 0 !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
+.family-search-hide-original { display: none !important; }
+
+/* -------- SEARCH RESULTS GRID (shown when a search is active) -------- */
+#searchResultsContainer {
+  width: 100%;
+  max-width: 1100px;
+  margin: 22px auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 22px;
+  align-items: start;
+  box-sizing: border-box;
+  padding: 0 12px;
+}
+.sr-card {
+  position: relative;
+  overflow: visible;
+  background: transparent;
+  text-align: center;           /* center inline elements inside the card */
+}
+
+.sr-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+
+/* Download button displayed under the image (not overlay) */
+.sr-controls {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.sr-download {
+  display: inline-block;
+  background: #fff;
+  color: #8b1b1b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.sr-download:hover { transform: scale(1.03); box-shadow: 0 4px 14px rgba(0,0,0,0.28); }
+
+/* Caption remains below controls */
+.sr-caption {
+  margin-top: 8px;
+  text-align: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* responsive tweaks */
+@media (max-width: 768px) { .family-search-inner { max-width: 92%; } .family-search-title { font-size: 36px; } }
+@media (max-width: 480px) { .family-search-inner { padding: 0 12px; } .family-search-title { font-size: 28px; } .family-search-wrap #familySearch { font-size: 15px; padding: 10px; } }
+</style>
+
+<script>
+(function () {
+  // CONFIG: selector(s) for the Squarespace gallery container(s) where images are rendered
+  const galleryContainerSelector = '.sqs-block-gallery, .sqs-gallery';
+
+  const searchBox = document.getElementById('familySearch');
+  const noResults = document.getElementById('noResults');
+  const searchCount = document.getElementById('searchCount');
+
+  // helpers
+  function debounce(fn, wait) { let t; return function () { clearTimeout(t); t = setTimeout(() => fn.apply(this, arguments), wait); }; }
+  function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+  function norm(text) { if (!text) return ''; return text.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g,' ').toLowerCase().trim(); }
+
+  // locate gallery items (adapt if your theme uses different wrappers)
+  function getGalleryItems() {
+    const containers = document.querySelectorAll(galleryContainerSelector);
+    if (containers.length === 0) {
+      return Array.from(document.querySelectorAll('figure, .image-slide, .gallery-item, .sqs-gallery-image'));
+    }
+    let items = [];
+    containers.forEach(c => {
+      items = items.concat(Array.from(c.querySelectorAll('figure, .image-slide, .gallery-item, .sqs-gallery-image')));
+    });
+    return Array.from(new Set(items));
+  }
+
+  // build searchable text from caption / alt / filename
+  function getSearchText(item) {
+    const parts = [];
+    const captionEl = item.querySelector('figcaption, .image-caption, .gallery-caption, .image-overlay-text-content');
+    if (captionEl && captionEl.textContent) parts.push(captionEl.textContent);
+    const img = item.querySelector('img');
+    if (img) {
+      if (img.alt) parts.push(img.alt);
+      if (img.title) parts.push(img.title);
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-image');
+      if (src) {
+        try { const u = new URL(src, window.location.origin); const fn = u.pathname.split('/').pop(); if (fn) parts.push(fn); } catch (e) { /* ignore */ }
+      }
+    }
+    ['data-filename','data-image-name','data-name'].forEach(k => { const v = item.getAttribute(k); if (v) parts.push(v); });
+    return norm(parts.join(' '));
+  }
+
+  // image URL selection & filename maker (used for downloads and cloned results)
+  function getImageUrlForDownload(item) {
+    const img = item.querySelector('img');
+    if (!img) return null;
+    const candidates = [
+      img.getAttribute('data-image'),
+      img.getAttribute('data-src'),
+      img.getAttribute('data-original'),
+      img.getAttribute('src')
+    ].filter(Boolean);
+    const srcset = img.getAttribute('srcset');
+    if (srcset) {
+      try {
+        const parts = srcset.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length) {
+          const last = parts[parts.length - 1].split(' ')[0];
+          if (last) candidates.unshift(last);
+        }
+      } catch (e) {}
+    }
+    return candidates[0] || null;
+  }
+  function getFilenameFromUrl(url, caption) {
+    if (!url) return (caption ? caption.replace(/\s+/g,'_') : 'photo') + '.jpg';
+    try { const u = new URL(url, window.location.origin); const base = u.pathname.split('/').pop().split('?')[0]; return base || (caption ? caption.replace(/\s+/g,'_') + '.jpg' : 'photo.jpg'); } catch (e) { return (caption ? caption.replace(/\s+/g,'_') : 'photo') + '.jpg'; }
+  }
+
+  // download helper: fetch->blob with fallback to open in new tab
+  async function downloadViaFetch(url, filename, btn) {
+    if (!url) return;
+    if (btn) { btn.disabled = true; const prev = btn.textContent; btn.textContent = 'Downloading...'; }
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('Network response not OK');
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.style.display = 'none'; a.href = objUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      console.warn('Download via fetch failed, opening image in new tab as fallback.', err);
+      window.open(url, '_blank', 'noopener');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Download'; }
+    }
+  }
+
+  // ----- RESULTS GRID creation & helpers ----- //
+  function ensureResultsContainer() {
+    let container = document.getElementById('searchResultsContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'searchResultsContainer';
+      const inner = document.querySelector('.family-search-inner');
+      if (inner) {
+        const ref = inner.querySelector('#noResults') || inner.querySelector('#searchCount') || inner.querySelector('#familySearch');
+        ref && ref.insertAdjacentElement('afterend', container);
+      } else {
+        document.body.insertBefore(container, document.body.firstChild);
+      }
+    }
+    return container;
+  }
+  function clearResultsContainer() { const container = document.getElementById('searchResultsContainer'); if (container) container.innerHTML = ''; }
+
+  function createResultCardFromItem(item) {
+    const imageUrl = getImageUrlForDownload(item);
+    const captionEl = item.querySelector('figcaption, .image-caption, .gallery-caption, .image-overlay-text-content');
+    const captionText = captionEl ? captionEl.textContent.trim() : '';
+
+    const card = document.createElement('div');
+    card.className = 'sr-card';
+
+    const img = document.createElement('img');
+    img.src = imageUrl || (item.querySelector('img') ? item.querySelector('img').src : '');
+    img.alt = captionText || 'Family photo';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sr-download';
+    btn.textContent = 'Download';
+    btn.setAttribute('aria-label', 'Download photo');
+
+    const cap = document.createElement('div');
+    cap.className = 'sr-caption';
+    cap.textContent = captionText;
+
+    btn.addEventListener('click', function () {
+      const filename = getFilenameFromUrl(img.src, captionText);
+      try {
+        // attempt native anchor download
+        const a = document.createElement('a'); a.href = img.src; a.download = filename; a.style.display = 'none'; document.body.appendChild(a); a.click(); a.remove();
+        // then attempt fetch fallback
+        downloadViaFetch(img.src, filename, btn);
+      } catch (e) {
+        downloadViaFetch(img.src, filename, btn);
+      }
+    }, { passive: true });
+
+    card.appendChild(img);
+    card.appendChild(btn);
+    card.appendChild(cap);
+    return card;
+  }
+
+  /**
+   * applyFilter - builds result grid of matches and hides original galleries while filtered.
+   */
+  function applyFilter(rawFilter) {
+    const filter = norm(rawFilter || '');
+    const tokens = filter ? filter.split(/\s+/).filter(Boolean) : [];
+    const allItems = getGalleryItems();
+    const matches = [];
+
+    // Reset original captions highlights
+    allItems.forEach(i => {
+      const cap = i.querySelector('figcaption, .image-caption, .gallery-caption, .image-overlay-text-content');
+      if (cap) cap.innerHTML = escapeHtml(cap.textContent || '');
+    });
+
+    // collect matches
+    allItems.forEach(item => {
+      const text = getSearchText(item);
+      const isMatch = tokens.length === 0 || tokens.every(t => text.includes(t));
+      if (isMatch) matches.push(item);
+    });
+
+    const resultsContainer = ensureResultsContainer();
+
+    if (tokens.length === 0) {
+      // Show original gallery & clear results
+      clearResultsContainer();
+      const containers = document.querySelectorAll(galleryContainerSelector);
+      containers.forEach(c => { c.classList.remove('family-search-hide-original'); c.style.display = ''; });
+      noResults.style.display = 'none';
+      searchCount.style.display = 'none';
+      return;
+    }
+
+    // Build results grid (clones)
+    clearResultsContainer();
+    matches.forEach(item => resultsContainer.appendChild(createResultCardFromItem(item)));
+
+    // Hide original gallery containers
+    const containers = document.querySelectorAll(galleryContainerSelector);
+    containers.forEach(c => { c.classList.add('family-search-hide-original'); c.style.display = 'none'; });
+
+    // Update UI meta
+    searchCount.style.display = 'block';
+    searchCount.textContent = matches.length + (matches.length === 1 ? ' photo found' : ' photos found');
+    noResults.style.display = matches.length === 0 ? 'block' : 'none';
+  }
+
+  // small prefill from URL
+  function prefillFromUrl() {
+    const q = new URLSearchParams(window.location.search);
+    const val = q.get('family') || q.get('search') || q.get('q');
+    if (val) { searchBox.value = val; applyFilter(val); }
+  }
+
+  const debouncedFilter = debounce(function (e) { applyFilter(e.target.value); }, 180);
+
+  // Observe gallery changes and re-run filter (keeps results up-to-date)
+  const observer = new MutationObserver(function () { applyFilter(searchBox.value); });
+  const containers = document.querySelectorAll(galleryContainerSelector);
+  containers.forEach(c => observer.observe(c, { childList: true, subtree: true }));
+
+  // wire input events
+  searchBox.addEventListener('input', debouncedFilter);
+  searchBox.addEventListener('search', function () { if (!this.value) applyFilter(''); });
+
+  // init
+  prefillFromUrl();
+
+  // expose API for debugging
+  window.__familyPhotoSearch = { applyFilter, getItems: getGalleryItems };
+
+})();
+</script>
