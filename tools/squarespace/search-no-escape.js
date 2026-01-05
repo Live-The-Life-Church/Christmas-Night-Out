@@ -104,18 +104,10 @@
     const btn = document.createElement('button'); btn.className = 'sr-download'; btn.type = 'button'; btn.textContent = 'Download';
     btn.setAttribute('aria-label', 'Download photo');
 
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', async function () {
       const filename = getFilenameFromUrl(obj.url, obj.caption);
-      // Try direct download first (works in most browsers)
-      const a = document.createElement('a');
-      a.href = obj.url;
-      a.download = filename;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Also trigger fetch-based download as fallback for CORS-protected images
-      downloadViaFetch(obj.url, filename, btn);
+      // Use fetch-based download which handles both same-origin and CORS scenarios
+      await downloadViaFetch(obj.url, filename, btn);
     }, { passive: true });
 
     controls.appendChild(btn);
