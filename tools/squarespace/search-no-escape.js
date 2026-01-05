@@ -17,7 +17,7 @@
  * 
  * MANIFEST URL:
  * - Uses: https://raw.githubusercontent.com/Live-The-Life-Church/Christmas-Night-Out/refs/heads/main/cno_2025_photos_manifest.json
- * - This URL points to the filtered manifest containing only santa-photos-2025 entries
+ * - This URL points to the filtered manifest containing only santa-photos-2025 entries (sourcePage: santaphotobackend/santa-photos-2025#page)
  */
 
 /* Manifest-based search + expand-on-results (no visible collapse button, no Escape-key collapse).
@@ -106,18 +106,16 @@
 
     btn.addEventListener('click', function () {
       const filename = getFilenameFromUrl(obj.url, obj.caption);
-      try {
-        const a = document.createElement('a');
-        a.href = obj.url;
-        a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        downloadViaFetch(obj.url, filename, btn);
-      } catch (e) {
-        downloadViaFetch(obj.url, filename, btn);
-      }
+      // Try direct download first (works in most browsers)
+      const a = document.createElement('a');
+      a.href = obj.url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Also trigger fetch-based download as fallback for CORS-protected images
+      downloadViaFetch(obj.url, filename, btn);
     }, { passive: true });
 
     controls.appendChild(btn);
